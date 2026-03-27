@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchSalon, fetchInsights, fetchClients, generateCampaign, checkoutAnalysis, predictRevenue } from '../../lib/api.js';
 import AIChat from '../../components/shared/AIChat.jsx';
+import AgendaView from '../../components/owner/AgendaView.jsx';
+import ClientProfile from '../../components/owner/ClientProfile.jsx';
+import StatsView from '../../components/owner/StatsView.jsx';
+import { useNotifications, NotificationPanel, ToastStack } from '../../components/owner/Notifications.jsx';
 
 const C = {
   bg: 'var(--owner-bg)', bg2: 'var(--owner-bg2)', bg3: 'var(--owner-bg3)',
@@ -87,7 +91,7 @@ function RevenueBar({ data }) {
   );
 }
 
-function ClientRow({ client, onAnalyze }) {
+function ClientRow({ client, onAnalyze, onViewProfile }) {
   const riskColors = { low: C.green, medium: C.amber, high: C.red, critical: '#ff3333' };
   const riskLabels = { low: 'Fidèle', medium: 'Moyen', high: 'Risque', critical: 'Critique' };
   return (
@@ -97,6 +101,7 @@ function ClientRow({ client, onAnalyze }) {
     }}
       onMouseEnter={e => e.currentTarget.style.background = C.greenDim}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      onClick={() => onViewProfile && onViewProfile(client)}
     >
       <div style={{ width: 32, height: 32, borderRadius: '50%', background: C.greenDim, border: `1px solid ${C.border2}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: C.green, flexShrink: 0 }}>
         {client.avatar}
@@ -130,6 +135,9 @@ export default function OwnerDashboard() {
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [loadingPrediction, setLoadingPrediction] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const { notifs, toasts, unreadCount, markRead, markAllRead, dismissToast } = useNotifications();
 
   useEffect(() => {
     fetchSalon().then(setData);
@@ -167,9 +175,10 @@ export default function OwnerDashboard() {
   const kpis = data?.kpis;
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '◈' },
+    { id: 'agenda', label: 'Agenda', icon: '◻' },
     { id: 'clients', label: 'Clients', icon: '◎' },
     { id: 'campaigns', label: 'Campagnes IA', icon: '◇' },
-    { id: 'prediction', label: 'Prévisions IA', icon: '◉' },
+    { id: 'stats', label: 'Statistiques', icon: '◉' },
   ];
 
   return (
@@ -231,7 +240,7 @@ export default function OwnerDashboard() {
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button onClick={() => setShowChat(!showChat)} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               background: C.greenDim, border: `1px solid ${C.border2}`,
@@ -241,6 +250,19 @@ export default function OwnerDashboard() {
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, animation: 'pulse 2s infinite' }} />
               SalonIQ AI · 4 insights
             </button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowNotifs(!showNotifs)} style={{
+                width: 36, height: 36, borderRadius: 10, background: C.bg3,
+                border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', color: C.text2, position: 'relative'
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                {unreadCount > 0 && <span style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: C.amber, border: `2px solid ${C.bg}` }} />}
+              </button>
+              {showNotifs && (
+                <NotificationPanel notifs={notifs} unreadCount={unreadCount} onMarkRead={markRead} onMarkAll={markAllRead} onClose={() => setShowNotifs(false)} />
+              )}
+            </div>
           </div>
         </header>
 
@@ -354,7 +376,7 @@ export default function OwnerDashboard() {
           )}
 
           {/* CLIENTS TAB */}
-          {activeTab === 'clients' && (
+          {activeTab === 'clients' && !selectedClientId && (
             <div className="fade-up">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
                 <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
@@ -362,7 +384,7 @@ export default function OwnerDashboard() {
                     <div style={{ fontSize: 14, fontWeight: 500 }}>Base clients ({clients.length})</div>
                     <div style={{ fontSize: 12, color: C.red }}>↓ {clients.filter(c => c.churnRisk === 'high' || c.churnRisk === 'critical').length} à risque</div>
                   </div>
-                  {clients.map(c => <ClientRow key={c.id} client={c} onAnalyze={handleAnalyzeClient} />)}
+                  {clients.map(c => <ClientRow key={c.id} client={c} onAnalyze={handleAnalyzeClient} onViewProfile={(cl) => setSelectedClientId(cl.id)} />)}
                 </div>
 
                 <div>
@@ -400,7 +422,26 @@ export default function OwnerDashboard() {
             </div>
           )}
 
-          {/* CAMPAIGNS TAB */}
+          {/* AGENDA TAB */}
+          {activeTab === 'agenda' && (
+            <div className="fade-up" style={{ height: 'calc(100vh - 160px)' }}>
+              <AgendaView />
+            </div>
+          )}
+
+          {/* STATS TAB */}
+          {activeTab === 'stats' && (
+            <div className="fade-up">
+              <StatsView />
+            </div>
+          )}
+
+          {/* CLIENT PROFILE VIEW */}
+          {activeTab === 'clients' && selectedClientId && (
+            <div className="fade-up">
+              <ClientProfile clientId={selectedClientId} onBack={() => setSelectedClientId(null)} />
+            </div>
+          )}
           {activeTab === 'campaigns' && (
             <div className="fade-up">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -447,64 +488,10 @@ export default function OwnerDashboard() {
             </div>
           )}
 
-          {/* PREDICTION TAB */}
-          {activeTab === 'prediction' && (
+          {/* STATS TAB — remplace prediction */}
+          {activeTab === 'stats' && (
             <div className="fade-up">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
-                <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)', padding: 24 }}>
-                  <div style={{ fontSize: 16, fontFamily: 'var(--display)', fontWeight: 400, marginBottom: 8 }}>Prévision de revenus IA</div>
-                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>Analyse basée sur vos données historiques, taux d'occupation et profil clients</div>
-                  <button onClick={handlePrediction} disabled={loadingPrediction} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '12px 24px',
-                    background: C.greenDim, border: `1px solid ${C.border2}`,
-                    borderRadius: 12, color: C.green, cursor: loadingPrediction ? 'not-allowed' : 'pointer',
-                    fontSize: 13, fontFamily: 'var(--sans)', transition: 'all 0.2s',
-                    opacity: loadingPrediction ? 0.7 : 1
-                  }}>
-                    {loadingPrediction ? <><div className="spinner green" style={{ width: 16, height: 16 }} />Analyse IA en cours…</> : '⬡ Lancer la prévision IA sur 30 jours'}
-                  </button>
-
-                  {prediction && (
-                    <div style={{ marginTop: 24, animation: 'fadeUp 0.4s ease both' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                        <div style={{ background: C.greenDim, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>CA prévu sur 30J</div>
-                          <div style={{ fontFamily: 'var(--display)', fontSize: 28, color: C.green }}>{prediction.predictedRevenue?.toLocaleString('fr-FR')} €</div>
-                          <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Confiance : {prediction.confidence}</div>
-                        </div>
-                        <div style={{ background: C.bg3, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.red, marginBottom: 6 }}>Principal risque</div>
-                          <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.4 }}>{prediction.mainRisk}</div>
-                          <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>Opportunité</div>
-                          <div style={{ fontSize: 13, color: C.text2 }}>{prediction.mainOpportunity}</div>
-                        </div>
-                      </div>
-                      {prediction.dailyEstimates && (
-                        <div style={{ background: C.bg3, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.text3, marginBottom: 12 }}>Estimation quotidienne sur 30 jours</div>
-                          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 60 }}>
-                            {prediction.dailyEstimates.slice(0, 30).map((v, i) => {
-                              const max = Math.max(...prediction.dailyEstimates);
-                              return <div key={i} style={{ flex: 1, height: `${(v / max) * 100}%`, background: C.greenDim, border: `1px solid ${C.border}`, borderRadius: '2px 2px 0 0', minHeight: 4 }} />;
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Right info */}
-                <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)', padding: 20 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 16 }}>Facteurs analysés par l'IA</div>
-                  {['Historique 6 mois', 'Taux d\'occupation actuel', 'Clients à risque', 'Saisonnalité', 'Performance stylistes', 'Campagnes actives'].map(f => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
-                      <span style={{ color: C.green }}>✓</span>
-                      <span style={{ color: C.text2 }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <StatsView />
             </div>
           )}
         </div>
@@ -524,6 +511,9 @@ export default function OwnerDashboard() {
           </div>
         </>
       )}
+
+      {/* Toast notifications */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
