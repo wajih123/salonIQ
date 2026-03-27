@@ -1,0 +1,14 @@
+{
+  "name": "saloniq",
+  "version": "1.0.0",
+  "description": "SalonIQ — Intelligent Salon Management Platform",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && node src/server.js",
+    "dev:frontend": "cd frontend && npx vite --port 3000",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

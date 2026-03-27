@@ -1,0 +1,103 @@
+/* ── SalonIQ Global Styles ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Owner theme — noir émeraude premium */
+  --owner-bg: #070b09;
+  --owner-bg2: #0d1210;
+  --owner-bg3: #131a16;
+  --owner-surface: #1a2420;
+  --owner-border: rgba(78,202,126,0.1);
+  --owner-border2: rgba(78,202,126,0.22);
+  --owner-green: #4eca7e;
+  --owner-green-dim: rgba(78,202,126,0.1);
+  --owner-green-glow: rgba(78,202,126,0.05);
+  --owner-amber: #f0a500;
+  --owner-red: #e05555;
+  --owner-gold: #c9a84c;
+  --owner-text: #e4ede8;
+  --owner-text2: #7aa88a;
+  --owner-text3: #3d5a47;
+
+  /* Client theme — blanc cassé chaleureux */
+  --client-bg: #faf8f5;
+  --client-bg2: #f4f1ec;
+  --client-bg3: #edeae4;
+  --client-surface: #ffffff;
+  --client-border: rgba(160,130,100,0.15);
+  --client-border2: rgba(160,130,100,0.3);
+  --client-rose: #c4775a;
+  --client-rose-dim: rgba(196,119,90,0.1);
+  --client-rose2: #a85a3e;
+  --client-sage: #6b8f71;
+  --client-sage-dim: rgba(107,143,113,0.1);
+  --client-gold: #b8933a;
+  --client-text: #2a201a;
+  --client-text2: #7a6558;
+  --client-text3: #b0a090;
+
+  /* Shared */
+  --display: 'Cormorant Garamond', serif;
+  --serif: 'Playfair Display', serif;
+  --sans: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+body {
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Scrollbar owner */
+.owner-view ::-webkit-scrollbar { width: 4px; }
+.owner-view ::-webkit-scrollbar-track { background: transparent; }
+.owner-view ::-webkit-scrollbar-thumb { background: var(--owner-border2); border-radius: 2px; }
+
+/* Scrollbar client */
+.client-view ::-webkit-scrollbar { width: 4px; }
+.client-view ::-webkit-scrollbar-track { background: transparent; }
+.client-view ::-webkit-scrollbar-thumb { background: var(--client-border2); border-radius: 2px; }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+@keyframes slideRight {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.fade-up { animation: fadeUp 0.5s ease both; }
+.fade-in { animation: fadeIn 0.3s ease both; }
+
+/* Loading spinner */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.spinner.green { border-top-color: var(--owner-green); border-right-color: var(--owner-green); }
+.spinner.rose { border-top-color: var(--client-rose); border-right-color: var(--client-rose); }
