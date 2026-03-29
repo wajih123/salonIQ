@@ -1,6 +1,6 @@
 import express from "express";
 import { chatWithOwnerAI, chatWithClientAI, generateCampaign, analyzeClientForCheckout, predictRevenue } from "../services/ai.js";
-import { salonData, stylists, services, clients, appointments, kpis, campaigns, aiInsights } from "../data/salon.js";
+import { salonData, stylists, services, clients, appointments, kpis, campaigns, aiInsights, expenses, financials, stylistMetrics, reviews, loyaltyTiers, heatmapData, serviceProfitability, cashFlowData } from "../data/salon.js";
 
 const router = express.Router();
 
@@ -18,12 +18,55 @@ router.get("/appointments", (req, res) => res.json(appointments));
 router.get("/campaigns", (req, res) => res.json(campaigns));
 router.get("/insights", (req, res) => res.json(aiInsights));
 
+// ─── FINANCE & PERFORMANCE ───────────────────────────────────────────────────
+
+router.get("/finance", (req, res) => {
+  const currentMonth = financials.at(-1);
+  const prevMonth = financials.at(-2);
+  const ytdRevenue = financials.reduce((s, m) => s + m.revenue, 0);
+  const ytdProfit = financials.reduce((s, m) => s + m.grossMargin, 0);
+  const ytdMarginPct = ((ytdProfit / ytdRevenue) * 100).toFixed(1);
+  const revenueGrowthMoM = (((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue) * 100).toFixed(1);
+  const breakEvenDaily = Math.ceil(expenses.current.total / 26);
+
+  res.json({
+    expenses: expenses.current,
+    expensesHistory: expenses.history,
+    financials,
+    summary: {
+      ytdRevenue,
+      ytdProfit,
+      ytdMarginPct: Number.parseFloat(ytdMarginPct),
+      currentMonthMargin: currentMonth.marginPct,
+      revenueGrowthMoM: Number.parseFloat(revenueGrowthMoM),
+      breakEvenMonthly: expenses.current.total,
+      breakEvenDaily,
+      revenueVsBreakEven: currentMonth.revenue - expenses.current.total,
+    },
+  });
+});
+
+router.get("/performance", (req, res) => {
+  const totalRevenue = stylistMetrics.reduce((s, sm) => s + sm.revenueMonth, 0);
+  const avgRevenuePerHour = (stylistMetrics.reduce((s, sm) => s + sm.revenuePerHour, 0) / stylistMetrics.length).toFixed(1);
+  const avgRebooking = Math.round(stylistMetrics.reduce((s, sm) => s + sm.rebookingRate, 0) / stylistMetrics.length);
+  res.json({
+    stylists: stylistMetrics,
+    teamSummary: {
+      totalRevenue,
+      avgRevenuePerHour: Number.parseFloat(avgRevenuePerHour),
+      avgRebookingRate: avgRebooking,
+      topPerformer: stylistMetrics.reduce((a, b) => a.revenueMonth > b.revenueMonth ? a : b, stylistMetrics[0]).name,
+      totalClientsServed: stylistMetrics.reduce((s, sm) => s + sm.clientsServed, 0),
+    },
+  });
+});
+
 // ─── DISPONIBILITÉS BOOKING ──────────────────────────────────────────────
 
 router.get("/availability", (req, res) => {
   const { date, serviceId, stylistId } = req.query;
   const service = services.find(s => s.id === serviceId);
-  const duration = service?.duration || 60;
 
   const slots = [];
   for (let h = 9; h <= 18; h++) {
@@ -92,6 +135,74 @@ router.post("/ai/client/chat", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── AVIS CLIENTS ────────────────────────────────────────────────────────────
+
+router.get("/reviews", (req, res) => {
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const dist = [5, 4, 3, 2, 1].map(s => ({ stars: s, count: reviews.filter(r => r.rating === s).length }));
+  res.json({ reviews, avgRating: Math.round(avg * 10) / 10, totalReviews: reviews.length, distribution: dist });
+});
+
+router.post("/reviews", (req, res) => {
+  const { clientName, avatar, stylistId, stylistName, serviceId, rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: "La note doit être entre 1 et 5" });
+  }
+  const review = {
+    id: `r${Date.now()}`,
+    clientName: clientName || "Client anonyme",
+    avatar: avatar || "??",
+    stylistId, stylistName, serviceId,
+    date: new Date().toISOString().split("T")[0],
+    rating, comment: comment || "",
+    published: true,
+  };
+  res.json({ success: true, review });
+});
+
+// ─── FIDÉLITÉ CLIENT ─────────────────────────────────────────────────────────
+
+router.get("/loyalty/:clientId", (req, res) => {
+  const client = clients.find(c => c.id === req.params.clientId);
+  if (!client) return res.status(404).json({ error: "Client introuvable" });
+  const tier = loyaltyTiers.reduce((best, t) => (client.loyaltyPoints >= t.minPoints ? t : best), loyaltyTiers[0]);
+  const nextTier = loyaltyTiers.find(t => t.minPoints > client.loyaltyPoints) || null;
+  const pointsEarnedPerVisit = Math.round(client.totalSpent / client.totalVisits / 10);
+  res.json({
+    points: client.loyaltyPoints,
+    tier,
+    nextTier: nextTier ? { ...nextTier, pointsNeeded: nextTier.minPoints - client.loyaltyPoints } : null,
+    pointsEarnedPerVisit,
+    allTiers: loyaltyTiers,
+  });
+});
+
+// ─── ANALYTICS AVANCÉS ───────────────────────────────────────────────────────
+
+router.get("/analytics/heatmap", (req, res) => res.json(heatmapData));
+
+router.get("/analytics/services", (req, res) => {
+  const totalRevenue = serviceProfitability.reduce((s, sv) => s + sv.revenue, 0);
+  const totalSessions = serviceProfitability.reduce((s, sv) => s + sv.sessions, 0);
+  const avgMargin = (serviceProfitability.reduce((s, sv) => s + sv.grossMarginPct, 0) / serviceProfitability.length).toFixed(1);
+  const enriched = serviceProfitability.map(sv => ({
+    ...sv,
+    revenuePct: Math.round((sv.revenue / totalRevenue) * 100),
+    netMarginEur: Math.round(sv.avgPrice - sv.productCost - sv.laborCost),
+  }));
+  res.json({ services: enriched, totals: { revenue: totalRevenue, sessions: totalSessions, avgMarginPct: Number.parseFloat(avgMargin) } });
+});
+
+// ─── TRÉSORERIE ──────────────────────────────────────────────────────────────
+
+router.get("/cashflow", (req, res) => {
+  const history = cashFlowData.filter(m => !m.forecast);
+  const forecast = cashFlowData.filter(m => m.forecast);
+  const currentCash = history.at(-1).closing;
+  const avgMonthlyNet = Math.round(history.reduce((s, m) => s + m.net, 0) / history.length);
+  res.json({ cashFlow: cashFlowData, currentCash, avgMonthlyNet, forecastMonths: forecast.length });
 });
 
 // ─── BOOKING ─────────────────────────────────────────────────────────────────

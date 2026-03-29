@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchServices, fetchStylists, fetchAvailability, createBooking } from '../../lib/api.js';
+import { fetchServices, fetchStylists, fetchAvailability, createBooking, submitReview } from '../../lib/api.js';
 import AIChat from '../../components/shared/AIChat.jsx';
 
 const C = {
@@ -12,8 +12,29 @@ const C = {
   text: 'var(--client-text)', text2: 'var(--client-text2)', text3: 'var(--client-text3)',
 };
 
-const STEPS = ['service', 'stylist', 'slot', 'info', 'confirm'];
+// Generate next 14 bookable days (Mon–Sat, skip Sun)
+function getBookableDates() {
+  const dates = [];
+  const d = new Date('2026-03-27');
+  d.setDate(d.getDate() + 1); // start from tomorrow
+  while (dates.length < 14) {
+    if (d.getDay() !== 0) { // skip Sunday
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+const BOOKABLE_DATES = getBookableDates();
 
+function formatDate(iso) {
+  const d = new Date(iso);
+  const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  const months = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+const STEPS = ['service', 'stylist', 'slot', 'info', 'confirm'];
 function Step({ current, steps }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 32 }}>
@@ -101,6 +122,7 @@ export default function ClientBooking() {
   const [selectedService, setSelectedService] = useState(null);
   const [selectedStylist, setSelectedStylist] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(BOOKABLE_DATES[0]);
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [clientInfo, setClientInfo] = useState({ name: '', phone: '', email: '' });
@@ -108,7 +130,9 @@ export default function ClientBooking() {
   const [showAI, setShowAI] = useState(false);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState('Tous');
-  const selectedDate = '2026-03-28';
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
   useEffect(() => {
     fetchServices().then(data => {
@@ -125,7 +149,7 @@ export default function ClientBooking() {
       fetchAvailability(selectedDate, selectedService.id, selectedStylist.id)
         .then(data => { setSlots(data.slots || []); setLoadingSlots(false); });
     }
-  }, [step]);
+  }, [step, selectedDate]);
 
   async function handleConfirm() {
     const result = await createBooking({
@@ -135,6 +159,20 @@ export default function ClientBooking() {
     });
     setBooking(result.booking);
     setStep('confirm');
+  }
+
+  async function handleSubmitReview() {
+    if (reviewRating === 0) return;
+    await submitReview({
+      clientName: clientInfo.name,
+      avatar: clientInfo.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+      stylistId: selectedStylist?.id,
+      stylistName: selectedStylist?.name,
+      serviceId: selectedService?.id,
+      rating: reviewRating,
+      comment: reviewComment,
+    }).catch(() => {});
+    setReviewSubmitted(true);
   }
 
   const filteredServices = activeCategory === 'Tous' ? services : services.filter(s => s.category === activeCategory);
@@ -239,8 +277,24 @@ export default function ClientBooking() {
           {step === 'slot' && (
             <div className="fade-up">
               <button onClick={() => setStep('stylist')} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: 13, marginBottom: 16, fontFamily: 'var(--sans)', display: 'flex', alignItems: 'center', gap: 6 }}>← Retour</button>
-              <h1 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 400, color: C.text, marginBottom: 6 }}>Choisissez un créneau</h1>
-              <p style={{ fontSize: 14, color: C.text3, marginBottom: 24 }}>Samedi 28 mars 2026 · {selectedStylist?.name}</p>
+              <h1 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 400, color: C.text, marginBottom: 6 }}>Choisissez une date & un créneau</h1>
+              <p style={{ fontSize: 14, color: C.text3, marginBottom: 20 }}>{selectedStylist?.name} · {selectedService?.name}</p>
+
+              {/* Date picker */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 8, fontWeight: 500 }}>Date souhaitée</div>
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
+                  {BOOKABLE_DATES.map(d => (
+                    <button key={d} onClick={() => { setSelectedDate(d); setSelectedSlot(null); }} style={{
+                      padding: '8px 14px', borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap',
+                      border: `1.5px solid ${selectedDate === d ? C.rose : C.border}`,
+                      background: selectedDate === d ? C.roseDim : C.surface,
+                      color: selectedDate === d ? C.rose : C.text2, fontSize: 12,
+                      fontFamily: 'var(--sans)', transition: 'all 0.15s', flexShrink: 0
+                    }}>{formatDate(d)}</button>
+                  ))}
+                </div>
+              </div>
 
               {loadingSlots ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: C.text3, fontSize: 13, padding: '24px 0' }}>
@@ -251,6 +305,7 @@ export default function ClientBooking() {
                   {slots.map((slot, i) => (
                     <SlotButton key={i} slot={slot} selected={selectedSlot?.time === slot.time} onSelect={setSelectedSlot} />
                   ))}
+                  {slots.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', color: C.text3, fontSize: 13, padding: '16px 0' }}>Aucun créneau disponible ce jour.</div>}
                 </div>
               )}
 
@@ -343,6 +398,49 @@ export default function ClientBooking() {
                 background: 'none', border: `1.5px solid ${C.border2}`,
                 color: C.text2, cursor: 'pointer', fontSize: 13, fontFamily: 'var(--sans)'
               }}>Nouvelle réservation</button>
+
+              {/* Loyalty points earned */}
+              <div style={{ marginTop: 20, padding: '14px 20px', background: C.sageDim, border: `1px solid ${C.sage}`, borderRadius: 12, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+                <div style={{ fontSize: 11, color: C.sage, fontWeight: 500, marginBottom: 4 }}>✦ Points fidélité gagnés</div>
+                <div style={{ fontSize: 22, fontFamily: 'var(--display)', color: C.text }}>+{Math.round((selectedService?.price || 0) / 10)} points</div>
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>1 point par tranche de 10 € · Consultez votre solde en salon</div>
+              </div>
+
+              {/* Post-booking review */}
+              {reviewSubmitted ? (
+                <div style={{ marginTop: 20, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto', textAlign: 'center', color: C.sage, fontSize: 13, padding: '12px 0' }}>
+                  ✓ Merci pour votre avis ! Il aide toute l'équipe.
+                </div>
+              ) : (
+                <div style={{ marginTop: 20, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 20px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>Comment s'est passée votre dernière visite ?</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button key={star} onClick={() => setReviewRating(star)} style={{
+                        fontSize: 28, background: 'none', border: 'none', cursor: 'pointer',
+                        color: star <= reviewRating ? '#f0a500' : C.border2,
+                        transition: 'transform 0.15s, color 0.15s',
+                        transform: star <= reviewRating ? 'scale(1.2)' : 'scale(1)'
+                      }}>★</button>
+                    ))}
+                  </div>
+                  {reviewRating > 0 && (
+                    <textarea
+                      placeholder="Un commentaire ? (optionnel)"
+                      value={reviewComment}
+                      onChange={e => setReviewComment(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg3, color: C.text, fontSize: 12, fontFamily: 'var(--sans)', resize: 'none', minHeight: 60, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  )}
+                  {reviewRating > 0 && (
+                    <button onClick={handleSubmitReview} style={{
+                      marginTop: 10, width: '100%', padding: '10px', borderRadius: 10,
+                      background: C.roseDim, border: `1px solid ${C.border2}`, color: C.rose,
+                      cursor: 'pointer', fontSize: 13, fontFamily: 'var(--sans)', fontWeight: 500
+                    }}>Envoyer mon avis</button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </main>

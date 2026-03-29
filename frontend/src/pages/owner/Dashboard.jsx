@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { fetchSalon, fetchInsights, fetchClients, generateCampaign, checkoutAnalysis, predictRevenue } from '../../lib/api.js';
+import { useState, useEffect } from 'react';
+import { fetchSalon, fetchInsights, fetchClients, generateCampaign, checkoutAnalysis, fetchFinance, fetchReviews } from '../../lib/api.js';
 import AIChat from '../../components/shared/AIChat.jsx';
 import AgendaView from '../../components/owner/AgendaView.jsx';
 import ClientProfile from '../../components/owner/ClientProfile.jsx';
@@ -133,16 +133,19 @@ export default function OwnerDashboard() {
   const [campaignResult, setCampaignResult] = useState(null);
   const [generatingCampaign, setGeneratingCampaign] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
-  const [prediction, setPrediction] = useState(null);
-  const [loadingPrediction, setLoadingPrediction] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [financeData, setFinanceData] = useState(null);
+  const [reviewsData, setReviewsData] = useState(null);
+  const [clientSearch, setClientSearch] = useState('');
   const { notifs, toasts, unreadCount, markRead, markAllRead, dismissToast } = useNotifications();
 
   useEffect(() => {
     fetchSalon().then(setData);
     fetchInsights().then(setInsights);
     fetchClients().then(setClients);
+    fetchFinance().then(setFinanceData).catch(() => {});
+    fetchReviews().then(setReviewsData).catch(() => {});
   }, []);
 
   async function handleGenerateCampaign(type) {
@@ -163,15 +166,6 @@ export default function OwnerDashboard() {
     } catch { setCheckoutResult({ error: true, client }); }
   }
 
-  async function handlePrediction() {
-    setLoadingPrediction(true);
-    try {
-      const result = await predictRevenue();
-      setPrediction(result);
-    } catch { }
-    setLoadingPrediction(false);
-  }
-
   const kpis = data?.kpis;
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '◈' },
@@ -179,6 +173,8 @@ export default function OwnerDashboard() {
     { id: 'clients', label: 'Clients', icon: '◎' },
     { id: 'campaigns', label: 'Campagnes IA', icon: '◇' },
     { id: 'stats', label: 'Statistiques', icon: '◉' },
+    { id: 'finance', label: 'Finance P&L', icon: '◑' },
+    { id: 'reviews', label: 'Avis & NPS', icon: '★' },
   ];
 
   return (
@@ -272,12 +268,60 @@ export default function OwnerDashboard() {
           {activeTab === 'dashboard' && (
             <div className="fade-up">
               {/* KPIs */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 14 }}>
                 <KPICard label="CA aujourd'hui" value={kpis?.revenueToday || 2847} unit="€" change="+18.3% vs ven. dernier" changeType="up" />
                 <KPICard label="Rendez-vous" value={`${kpis?.appointmentsToday || 24}/${kpis?.appointmentsCapacity || 28}`} change={`${kpis?.occupancyRate || 85.7}% d'occupation`} changeType="neutral" />
                 <KPICard label="Clients actifs" value={kpis?.activeClients || 1284} change={`+${kpis?.newClientsWeek || 7} cette semaine`} changeType="up" />
                 <KPICard label="Risque départ" value={kpis?.churnRiskCount || 12} change="3 critiques · action requise" changeType="down" />
               </div>
+
+              {/* Revenue goal tracker */}
+              {(() => {
+                const current = kpis?.revenueMonth || 48600;
+                const target = kpis?.revenueTarget || 55000;
+                const pct = Math.min(100, Math.round((current / target) * 100));
+                const remaining = Math.max(0, target - current);
+                const daysLeft = 4;
+                const dailyNeeded = daysLeft > 0 ? Math.ceil(remaining / daysLeft) : 0;
+                return (
+                  <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)', padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 24 }}>
+                    <div style={{ minWidth: 120 }}>
+                      <div style={{ fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Objectif mensuel</div>
+                      {(() => {
+                          const goalColor = pct >= 100 ? C.green : (pct >= 80 ? C.amber : C.red);
+                          const barBg = pct >= 100 ? C.green : (pct >= 80 ? `linear-gradient(90deg, ${C.amber}, ${C.green})` : C.amber);
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                              <span style={{ fontFamily: 'var(--display)', fontSize: 24, color: goalColor }}>{pct}%</span>
+                              <span style={{ fontSize: 11, color: C.text3 }}>{current.toLocaleString('fr-FR')} / {target.toLocaleString('fr-FR')} €</span>
+                            </div>
+                          );
+                        })()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {(() => {
+                        const barBg = pct >= 100 ? C.green : (pct >= 80 ? `linear-gradient(90deg, ${C.amber}, ${C.green})` : C.amber);
+                        return (
+                          <div style={{ height: 8, background: C.bg3, borderRadius: 100, overflow: 'hidden', marginBottom: 6 }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: barBg, borderRadius: 100, transition: 'width 1s ease' }} />
+                          </div>
+                        );
+                      })()}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.text3 }}>
+                        <span>{remaining > 0 ? `Il manque ${remaining.toLocaleString('fr-FR')} €` : '✓ Objectif atteint !'}</span>
+                        <span>{daysLeft} jours restants · besoin de <span style={{ color: C.amber, fontFamily: 'var(--mono)' }}>{dailyNeeded.toLocaleString('fr-FR')} €/j</span></span>
+                      </div>
+                    </div>
+                    {reviewsData && (
+                      <div style={{ textAlign: 'center', minWidth: 80 }}>
+                        <div style={{ fontFamily: 'var(--display)', fontSize: 26, color: C.gold, lineHeight: 1 }}>{reviewsData.avgRating}</div>
+                        <div style={{ fontSize: 10, color: C.text3, marginTop: 3 }}>★ {reviewsData.totalReviews} avis</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Main grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
@@ -380,11 +424,35 @@ export default function OwnerDashboard() {
             <div className="fade-up">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
                 <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
-                  <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>Base clients ({clients.length})</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1, maxWidth: 280 }}>
+                      <div style={{ flex: 1, position: 'relative' }}>
+                        <input
+                          type="text"
+                          placeholder="Rechercher un client…"
+                          value={clientSearch}
+                          onChange={e => setClientSearch(e.target.value)}
+                          style={{
+                            width: '100%', padding: '7px 12px 7px 30px', borderRadius: 8,
+                            border: `1px solid ${clientSearch ? C.border2 : C.border}`,
+                            background: C.bg3, color: C.text, fontSize: 12,
+                            fontFamily: 'var(--sans)', outline: 'none', boxSizing: 'border-box'
+                          }}
+                        />
+                        <svg style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      </div>
+                      {clientSearch && <button onClick={() => setClientSearch('')} style={{ fontSize: 11, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontFamily: 'var(--sans)' }}>✕</button>}
+                    </div>
                     <div style={{ fontSize: 12, color: C.red }}>↓ {clients.filter(c => c.churnRisk === 'high' || c.churnRisk === 'critical').length} à risque</div>
                   </div>
-                  {clients.map(c => <ClientRow key={c.id} client={c} onAnalyze={handleAnalyzeClient} onViewProfile={(cl) => setSelectedClientId(cl.id)} />)}
+                  {clients
+                    .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.email.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone.includes(clientSearch))
+                    .map(c => <ClientRow key={c.id} client={c} onAnalyze={handleAnalyzeClient} onViewProfile={(cl) => setSelectedClientId(cl.id)} />)
+                  }
+                  {clientSearch && clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.email.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone.includes(clientSearch)).length === 0 && (
+                    <div style={{ padding: 24, textAlign: 'center', color: C.text3, fontSize: 13 }}>Aucun client ne correspond à "{clientSearch}"</div>
+                  )}
                 </div>
 
                 <div>
@@ -492,6 +560,255 @@ export default function OwnerDashboard() {
           {activeTab === 'stats' && (
             <div className="fade-up">
               <StatsView />
+            </div>
+          )}
+
+          {/* FINANCE TAB */}
+          {activeTab === 'finance' && (
+            <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 400, color: C.text }}>Finance & Compte de Résultat</div>
+
+              {/* Summary KPIs */}
+              {financeData && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                    {[
+                      { label: 'CA mensuel', value: `${financeData.financials[5].revenue.toLocaleString('fr-FR')} €`, change: `Obj. ${kpis?.revenueTarget?.toLocaleString('fr-FR')} €`, changeType: financeData.financials[5].revenue >= (kpis?.revenueTarget || 55000) ? 'up' : 'neutral' },
+                      { label: 'Charges totales', value: `${financeData.expenses.total.toLocaleString('fr-FR')} €`, change: `Seuil rentabilité/mois`, changeType: 'neutral' },
+                      { label: 'Résultat net', value: `${financeData.financials[5].grossMargin.toLocaleString('fr-FR')} €`, change: `Marge ${financeData.financials[5].marginPct}%`, changeType: 'up' },
+                      { label: 'Résultat YTD', value: `${(financeData.summary.ytdProfit / 1000).toFixed(1)}k €`, change: `Marge moy. ${financeData.summary.ytdMarginPct}%`, changeType: 'up' },
+                    ].map(k => <KPICard key={k.label} {...k} />)}
+                  </div>
+
+                  {/* P&L 6 months chart */}
+                  <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
+                    <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold }} />
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>CA vs Charges vs Résultat — 6 mois</span>
+                      </div>
+                      <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.gold }}>YTD {(financeData.summary.ytdProfit / 1000).toFixed(1)}k € net</div>
+                    </div>
+                    <div style={{ padding: '16px 20px' }}>
+                      {(() => {
+                        const fin = financeData.financials;
+                        const maxVal = Math.max(...fin.map(m => m.revenue));
+                        return (
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: 110 }}>
+                            {fin.map((m, i) => (
+                              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+                                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'flex-end', height: '100%', position: 'relative' }}>
+                                  {/* Revenue bar */}
+                                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${(m.revenue / maxVal) * 100}%`, background: i === 5 ? C.greenDim : 'rgba(30,43,39,0.5)', border: `1px solid ${i === 5 ? C.green : C.border}`, borderRadius: '3px 3px 0 0' }} />
+                                  {/* Expenses bar */}
+                                  <div style={{ position: 'absolute', bottom: 0, left: '15%', right: '15%', height: `${(m.expenses / maxVal) * 100}%`, background: 'rgba(224,85,85,0.15)', border: `1px solid rgba(224,85,85,0.3)`, borderRadius: '3px 3px 0 0' }} />
+                                  {/* Profit bar */}
+                                  <div style={{ position: 'absolute', bottom: 0, left: '30%', right: '30%', height: `${(m.grossMargin / maxVal) * 100}%`, background: 'rgba(201,168,76,0.25)', border: `1px solid ${C.gold}`, borderRadius: '3px 3px 0 0' }} />
+                                </div>
+                                <div style={{ fontSize: 10, color: i === 5 ? C.green : C.text3 }}>{m.month}</div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
+                        {[['CA', C.green], ['Charges', '#e05555'], ['Résultat net', C.gold]].map(([l, c]) => (
+                          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.text3 }}>
+                            <div style={{ width: 10, height: 4, borderRadius: 2, background: c, opacity: 0.7 }} />{l}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detail grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    {/* Expenses breakdown */}
+                    <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
+                      <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.red }} />
+                        Détail charges — Mars 2026
+                      </div>
+                      <div style={{ padding: '14px 16px' }}>
+                        {[
+                          ['Salaires bruts', financeData.expenses.salaires, '#e05555'],
+                          ['Charges sociales', financeData.expenses.chargesSociales, '#cc6655'],
+                          ['Loyer + charges', financeData.expenses.loyer, C.amber],
+                          ['Produits & fournitures', financeData.expenses.produits, C.gold],
+                          ['Marketing', financeData.expenses.marketing, C.green],
+                          ['Assurances & divers', financeData.expenses.assurances + financeData.expenses.divers, C.text3],
+                        ].map(([label, val, color]) => {
+                          const pct = ((val / financeData.expenses.total) * 100).toFixed(1);
+                          return (
+                            <div key={label} style={{ marginBottom: 11 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                <span style={{ fontSize: 11, color: C.text2 }}>{label}</span>
+                                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.text }}>{val.toLocaleString('fr-FR')} € <span style={{ color: C.text3 }}>({pct}%)</span></span>
+                              </div>
+                              <div style={{ height: 3, background: C.bg3, borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: color, opacity: 0.75, borderRadius: 2, transition: 'width 1s ease' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div style={{ paddingTop: 10, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500 }}>Total</span>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: C.red, fontWeight: 600 }}>{financeData.expenses.total.toLocaleString('fr-FR')} €</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Break-even */}
+                    <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
+                      <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber }} />
+                        Analyse seuil de rentabilité
+                      </div>
+                      <div style={{ padding: '16px' }}>
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 10, color: C.text3, marginBottom: 2 }}>Seuil mensuel</div>
+                          <div style={{ fontFamily: 'var(--display)', fontSize: 34, color: C.amber }}>{financeData.summary.breakEvenMonthly.toLocaleString('fr-FR')} €</div>
+                          <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>soit {financeData.summary.breakEvenDaily} €/jour</div>
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                            <span style={{ fontSize: 11, color: C.text3 }}>CA atteint vs seuil</span>
+                            <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.green, fontWeight: 500 }}>{Math.round((financeData.financials[5].revenue / financeData.summary.breakEvenMonthly) * 100)}%</span>
+                          </div>
+                          <div style={{ height: 10, background: C.bg3, borderRadius: 100, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(100, (financeData.financials[5].revenue / financeData.summary.breakEvenMonthly) * 100)}%`, background: `linear-gradient(90deg, ${C.amber}, ${C.green})`, borderRadius: 100, transition: 'width 1.2s ease' }} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {[
+                            ['Excédent ce mois', `+${financeData.summary.revenueVsBreakEven.toLocaleString('fr-FR')} €`, C.green],
+                            ['Croissance MoM', `+${financeData.summary.revenueGrowthMoM}%`, C.gold],
+                            ['Marge nette Mars', `${financeData.financials[5].marginPct}%`, C.green],
+                            ['Marge moy. 6M', `${financeData.summary.ytdMarginPct}%`, C.amber],
+                          ].map(([l, v, c]) => (
+                            <div key={l} style={{ background: C.bg3, borderRadius: 10, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 9, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>{l}</div>
+                              <div style={{ fontSize: 16, fontFamily: 'var(--display)', color: c }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Finance Chat CTA */}
+                  <div style={{ background: C.greenDim, border: `1px solid ${C.border2}`, borderRadius: 'var(--radius-lg)', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: C.green, marginBottom: 4 }}>⬡ Demandez à SalonIQ AI</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>
+                        "Comment améliorer ma marge nette ?" · "Quel est mon ROI sur les campagnes ?" · "Où couper les charges ?"
+                      </div>
+                    </div>
+                    <button onClick={() => setShowChat(true)} style={{ padding: '8px 16px', background: C.bg2, border: `1px solid ${C.border2}`, borderRadius: 10, color: C.green, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--sans)', whiteSpace: 'nowrap' }}>
+                      Ouvrir le copilote →
+                    </button>
+                  </div>
+                </>
+              )}
+              {!financeData && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.text3, fontSize: 13, padding: 20 }}>
+                  <div className="spinner green" style={{ width: 16, height: 16 }} /> Chargement des données financières…
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* REVIEWS TAB */}
+          {activeTab === 'reviews' && (
+            <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 400, color: C.text }}>Avis & Satisfaction clients</div>
+
+              {reviewsData ? (
+                <>
+                  {/* NPS / rating overview */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16 }}>
+                    <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--display)', fontSize: 56, color: C.gold, lineHeight: 1 }}>{reviewsData.avgRating}</div>
+                      <div style={{ fontSize: 18, color: C.gold, margin: '6px 0 4px' }}>{'★'.repeat(Math.round(reviewsData.avgRating))}{'☆'.repeat(5 - Math.round(reviewsData.avgRating))}</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>{reviewsData.totalReviews} avis vérifiés</div>
+                      <div style={{ marginTop: 14, padding: '6px 14px', borderRadius: 100, background: `${C.green}20`, border: `1px solid ${C.green}40`, fontSize: 11, color: C.green }}>
+                        NPS Score · +72 (Excellent)
+                      </div>
+                    </div>
+                    <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 14, color: C.text }}>Distribution des notes</div>
+                      {reviewsData.distribution.map(d => {
+                        const pct = reviewsData.totalReviews > 0 ? Math.round((d.count / reviewsData.totalReviews) * 100) : 0;
+                        return (
+                          <div key={d.stars} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                            <span style={{ fontSize: 12, color: C.gold, minWidth: 14, textAlign: 'right' }}>{d.stars}</span>
+                            <span style={{ color: C.gold, fontSize: 12 }}>★</span>
+                            <div style={{ flex: 1, height: 8, background: C.bg3, borderRadius: 100, overflow: 'hidden' }}>
+                              {(() => { const starColor = d.stars >= 4 ? C.green : (d.stars === 3 ? C.amber : C.red); return <div style={{ height: '100%', width: `${pct}%`, background: starColor, borderRadius: 100, transition: 'width 0.8s ease' }} />; })()}
+                            </div>
+                            <span style={{ fontSize: 11, color: C.text3, fontFamily: 'var(--mono)', minWidth: 28, textAlign: 'right' }}>{d.count}</span>
+                            <span style={{ fontSize: 10, color: C.text3, minWidth: 28 }}>({pct}%)</span>
+                          </div>
+                        );
+                      })}
+                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                        {[
+                          ['Promoteurs (5★)', `${reviewsData.distribution.find(d => d.stars === 5)?.count || 0}`, C.green],
+                          ['Neutres (3-4★)', `${(reviewsData.distribution.find(d => d.stars === 4)?.count || 0) + (reviewsData.distribution.find(d => d.stars === 3)?.count || 0)}`, C.amber],
+                          ['Détracteurs (1-2★)', `${(reviewsData.distribution.find(d => d.stars === 2)?.count || 0) + (reviewsData.distribution.find(d => d.stars === 1)?.count || 0)}`, C.red],
+                        ].map(([l, v, c]) => (
+                          <div key={l} style={{ background: C.bg3, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                            <div style={{ fontFamily: 'var(--display)', fontSize: 24, color: c }}>{v}</div>
+                            <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>{l}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reviews list */}
+                  <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 'var(--radius-lg)' }}>
+                    <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold }} />
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Avis récents</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: C.green }}>Tous publiés</span>
+                    </div>
+                    {reviewsData.reviews.map(r => (
+                      <div key={r.id} style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 14 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: C.greenDim, border: `1px solid ${C.border2}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, color: C.green }}>{r.avatar}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <div>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{r.clientName}</span>
+                              <span style={{ fontSize: 11, color: C.text3, marginLeft: 10 }}>via {r.stylistName}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: C.gold, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                              <span style={{ fontSize: 10, color: C.text3, fontFamily: 'var(--mono)' }}>{r.date}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5, fontStyle: 'italic' }}>"{r.comment}"</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* AI CTA */}
+                  <div style={{ background: C.greenDim, border: `1px solid ${C.border2}`, borderRadius: 'var(--radius-lg)', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: C.green, marginBottom: 4 }}>⬡ Analyse IA des avis</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>Demandez "Quels points améliorer selon les avis ?" ou "Qui sont mes clientes les plus satisfaites ?"</div>
+                    </div>
+                    <button onClick={() => setShowChat(true)} style={{ padding: '8px 16px', background: C.bg2, border: `1px solid ${C.border2}`, borderRadius: 10, color: C.green, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--sans)', whiteSpace: 'nowrap' }}>Analyser avec IA →</button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.text3, fontSize: 13, padding: 20 }}>
+                  <div className="spinner green" style={{ width: 16, height: 16 }} /> Chargement des avis…
+                </div>
+              )}
             </div>
           )}
         </div>

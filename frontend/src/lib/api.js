@@ -50,3 +50,28 @@ export async function checkoutAnalysis(clientId) {
 export async function predictRevenue() {
   const r = await fetch(`${BASE}/ai/predict-revenue`); return r.json();
 }
+export async function fetchFinance() {
+  const r = await fetch(`${BASE}/finance`); return r.json();
+}
+export async function fetchPerformance() {
+  const r = await fetch(`${BASE}/performance`); return r.json();
+}
+export async function fetchReviews() {
+  const r = await fetch(`${BASE}/reviews`); return r.json();
+}
+export async function submitReview(data) {
+  const r = await fetch(`${BASE}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  return r.json();
+}
+export async function fetchLoyalty(clientId) {
+  const r = await fetch(`${BASE}/loyalty/${clientId}`); return r.json();
+}
+export async function fetchHeatmap() {
+  const r = await fetch(`${BASE}/analytics/heatmap`); return r.json();
+}
+export async function fetchServiceProfitability() {
+  const r = await fetch(`${BASE}/analytics/services`); return r.json();
+}
+export async function fetchCashFlow() {
+  const r = await fetch(`${BASE}/cashflow`); return r.json();
+}

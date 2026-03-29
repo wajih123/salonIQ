@@ -73,3 +73,112 @@ export const aiInsights = [
   { id: "i3", type: "performance", priority: "low", title: "Emma A. est votre meilleure styliste ce mois", detail: "12 840€ de CA — 23% au-dessus de la moyenne équipe. Taux de rebooking : 82%.", action: "Voir le rapport complet" },
   { id: "i4", type: "alert", priority: "high", title: "Anna K. est à risque de départ ce soir", detail: "Sa dernière visite date de 10 semaines. Elle repart sans rebooking 80% du temps.", action: "Préparer offre loyauté pour le checkout" },
 ];
+
+// ─── DONNÉES FINANCIÈRES ─────────────────────────────────────────────────────
+
+/** Charges mensuelles détaillées (réalistes pour un salon 4 stylistes, Paris 2ème) */
+export const expenses = {
+  current: {
+    loyer: 3500,           // Loyer + charges locatives, Paris intramuros
+    salaires: 15200,       // Salaires bruts 4 stylistes (base + variable)
+    chargesSociales: 6840, // Charges patronales ~45% des salaires bruts
+    produits: 3200,        // Produits capillaires, fournitures, consommables
+    marketing: 800,        // Publicité réseaux sociaux, Google Ads, flyers
+    assurances: 420,       // RC Pro, multirisque, prévoyance
+    divers: 640,           // Maintenance, logiciels, abonnements, divers
+    total: 30600,          // ∑ = seuil de rentabilité mensuel
+  },
+  /** Historique 6 mois pour analyse des tendances */
+  history: [
+    { month: "Oct", loyer: 3500, salaires: 14800, chargesSociales: 6660, produits: 2900, marketing: 700, assurances: 420, divers: 580, total: 29560 },
+    { month: "Nov", loyer: 3500, salaires: 14800, chargesSociales: 6660, produits: 3100, marketing: 750, assurances: 420, divers: 610, total: 29840 },
+    { month: "Déc", loyer: 3500, salaires: 16200, chargesSociales: 7290, produits: 4100, marketing: 1200, assurances: 420, divers: 800, total: 33510 },
+    { month: "Jan", loyer: 3500, salaires: 14800, chargesSociales: 6660, produits: 2700, marketing: 650, assurances: 420, divers: 540, total: 29270 },
+    { month: "Fév", loyer: 3500, salaires: 15000, chargesSociales: 6750, produits: 2950, marketing: 750, assurances: 420, divers: 590, total: 29960 },
+    { month: "Mar", loyer: 3500, salaires: 15200, chargesSociales: 6840, produits: 3200, marketing: 800, assurances: 420, divers: 640, total: 30600 },
+  ],
+};
+
+/** Compte de résultat mensuel sur 6 mois */
+export const financials = [
+  { month: "Oct", revenue: 38400, expenses: 29560, grossMargin: 8840,  marginPct: 23, cumulative: 8840  },
+  { month: "Nov", revenue: 41200, expenses: 29840, grossMargin: 11360, marginPct: 27.6, cumulative: 20200 },
+  { month: "Déc", revenue: 52800, expenses: 33510, grossMargin: 19290, marginPct: 36.5, cumulative: 39490 },
+  { month: "Jan", revenue: 35600, expenses: 29270, grossMargin: 6330,  marginPct: 17.8, cumulative: 45820 },
+  { month: "Fév", revenue: 40100, expenses: 29960, grossMargin: 10140, marginPct: 25.3, cumulative: 55960 },
+  { month: "Mar", revenue: 48600, expenses: 30600, grossMargin: 18000, marginPct: 37, cumulative: 73960 },
+];
+
+/** Performance individuelle des stylistes — KPIs business et finance */
+export const stylistMetrics = [
+  { id: "s1", name: "Emma Aubert",  avatar: "EA", color: "#4eca7e", hoursMonth: 152, revenueMonth: 12840, revenuePerHour: 84.5, rebookingRate: 82, clientsServed: 78,  avgBasket: 165, bonusTarget: 14000, bonusAchievedPct: 91.7, satisfactionScore: 4.9 },
+  { id: "s2", name: "James Martin", avatar: "JM", color: "#f0a500", hoursMonth: 144, revenueMonth: 10200, revenuePerHour: 70.8, rebookingRate: 74, clientsServed: 65,  avgBasket: 157, bonusTarget: 12000, bonusAchievedPct: 85, satisfactionScore: 4.8 },
+  { id: "s3", name: "Sofia Remi",   avatar: "SR", color: "#c9a84c", hoursMonth: 148, revenueMonth: 8900,  revenuePerHour: 60.1, rebookingRate: 71, clientsServed: 58,  avgBasket: 153, bonusTarget: 11000, bonusAchievedPct: 80.9, satisfactionScore: 4.7 },
+  { id: "s4", name: "Kai Torres",   avatar: "KT", color: "#e05555", hoursMonth: 156, revenueMonth: 14200, revenuePerHour: 91, rebookingRate: 86, clientsServed: 84,  avgBasket: 169, bonusTarget: 14000, bonusAchievedPct: 101.4, satisfactionScore: 4.9 },
+];
+
+// ─── AVIS & FIDÉLITÉ ─────────────────────────────────────────────────────────
+
+/** Avis clients vérifiés après prestation */
+export const reviews = [
+  { id: "r1", clientId: "c3", clientName: "Maria Chen",    avatar: "MC", stylistId: "s3", stylistName: "Sofia Remi",   serviceId: "svc7", date: "2026-03-20", rating: 5, comment: "Sofia est exceptionnelle — ma kératine dure 4 mois. Résultat parfait !", published: true },
+  { id: "r2", clientId: "c1", clientName: "Sophie Laurent", avatar: "SL", stylistId: "s1", stylistName: "Emma Aubert",  serviceId: "svc4", date: "2026-03-10", rating: 5, comment: "Emma a transformé mes cheveux avec un balayage naturel magnifique. Cliente à vie !", published: true },
+  { id: "r3", clientId: "c5", clientName: "Zara Obi",       avatar: "ZO", stylistId: "s4", stylistName: "Kai Torres",   serviceId: "svc1", date: "2026-03-25", rating: 5, comment: "Kai est créatif et à l'écoute. Tout le monde me demande où je me coiffe.", published: true },
+  { id: "r4", clientId: "c4", clientName: "Tom Williams",   avatar: "TW", stylistId: "s2", stylistName: "James Martin", serviceId: "svc2", date: "2026-03-15", rating: 4, comment: "Très bonne coupe, ambiance agréable. Reviendrai sans hésiter.", published: true },
+  { id: "r5", clientId: "c2", clientName: "Anna Kowalski",  avatar: "AK", stylistId: "s2", stylistName: "James Martin", serviceId: "svc3", date: "2026-01-15", rating: 4, comment: "Belle couleur, bon conseil sur la teinte. Satisfaite du résultat.", published: true },
+  { id: "r6", clientId: "c3", clientName: "Maria Chen",    avatar: "MC", stylistId: "s3", stylistName: "Sofia Remi",   serviceId: "svc7", date: "2026-01-20", rating: 5, comment: "Fidèle depuis 3 ans — toujours impeccable. La meilleure adresse de Paris.", published: true },
+  { id: "r7", clientId: "c1", clientName: "Sophie Laurent", avatar: "SL", stylistId: "s1", stylistName: "Emma Aubert",  serviceId: "svc9", date: "2026-02-18", rating: 5, comment: "Emma comprend exactement ce que je veux. Coupe + brushing parfaits.", published: true },
+];
+
+/** Paliers programme de fidélité */
+export const loyaltyTiers = [
+  { name: "Bronze", minPoints: 0,   maxPoints: 99,       color: "#c9a84c", perk: "1 point par euro dépensé" },
+  { name: "Silver", minPoints: 100, maxPoints: 249,      color: "#9eb3c2", perk: "-5% sur les soins & traitements" },
+  { name: "Gold",   minPoints: 250, maxPoints: 499,      color: "#f0a500", perk: "-10% + priorité créneaux + soin offert à l'anniversaire" },
+  { name: "VIP",    minPoints: 500, maxPoints: Infinity,  color: "#e05555", perk: "-15% sur tout + service offert 1×/an + accès événements privés" },
+];
+
+// ─── ANALYTICS AVANCÉS ───────────────────────────────────────────────────────
+
+/** Heatmap d'occupation : occupancy% par heure (9h–18h) × jour (Lun–Sam) */
+export const heatmapData = {
+  hours: ["9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h"],
+  days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
+  data: [
+    [72, 85, 68, 42, 90, 98],   // 9h
+    [68, 78, 72, 38, 88, 95],   // 10h
+    [85, 90, 80, 45, 92, 100],  // 11h
+    [60, 72, 65, 40, 85, 92],   // 12h
+    [45, 55, 48, 32, 78, 88],   // 13h
+    [78, 85, 70, 35, 88, 94],   // 14h
+    [82, 90, 75, 38, 90, 96],   // 15h
+    [75, 82, 72, 42, 85, 90],   // 16h
+    [68, 75, 65, 35, 80, 85],   // 17h
+    [40, 45, 38, 20, 60, 70],   // 18h
+  ],
+};
+
+/** Rentabilité par prestation — marges nettes après produits + main d'œuvre */
+export const serviceProfitability = [
+  { id: "svc1",  name: "Coupe Femme",     category: "Coupe",    revenue: 9720,  sessions: 177, avgPrice: 55,  productCost: 2,  laborCost: 18, grossMarginPct: 63.6, trend: "+5%"  },
+  { id: "svc2",  name: "Coupe Homme",     category: "Coupe",    revenue: 3395,  sessions: 97,  avgPrice: 35,  productCost: 1,  laborCost: 12, grossMarginPct: 62.9, trend: "-2%"  },
+  { id: "svc3",  name: "Couleur complète",category: "Couleur",  revenue: 10692, sessions: 113, avgPrice: 95,  productCost: 18, laborCost: 38, grossMarginPct: 41.1, trend: "+3%"  },
+  { id: "svc4",  name: "Balayage",        category: "Couleur",  revenue: 13608, sessions: 105, avgPrice: 130, productCost: 22, laborCost: 48, grossMarginPct: 46.2, trend: "+8%"  },
+  { id: "svc6",  name: "Brushing",        category: "Coiffage", revenue: 4860,  sessions: 108, avgPrice: 45,  productCost: 3,  laborCost: 14, grossMarginPct: 62.2, trend: "0%"   },
+  { id: "svc7",  name: "Kératine",        category: "Soin",     revenue: 7290,  sessions: 41,  avgPrice: 180, productCost: 45, laborCost: 62, grossMarginPct: 40.6, trend: "+12%" },
+  { id: "svc8",  name: "Soin profond",    category: "Soin",     revenue: 2430,  sessions: 69,  avgPrice: 35,  productCost: 8,  laborCost: 12, grossMarginPct: 42.9, trend: "+4%"  },
+  { id: "svc10", name: "Balayage + Coupe",category: "Pack",     revenue: 5950,  sessions: 35,  avgPrice: 170, productCost: 24, laborCost: 55, grossMarginPct: 53.5, trend: "+15%" },
+];
+
+/** Trésorerie mensuelle — historique + prévision 3 mois */
+export const cashFlowData = [
+  { month: "Oct", opening: 38200, revenue: 38400, fixedCosts: 26660, variableCosts: 2900,  net:  8840, closing:  47040, forecast: false },
+  { month: "Nov", opening: 47040, revenue: 41200, fixedCosts: 26660, variableCosts: 3180,  net: 11360, closing:  58400, forecast: false },
+  { month: "Déc", opening: 58400, revenue: 52800, fixedCosts: 26660, variableCosts: 6850,  net: 19290, closing:  79240, forecast: false },
+  { month: "Jan", opening: 79240, revenue: 35600, fixedCosts: 26660, variableCosts: 2610,  net:  6330, closing:  85570, forecast: false },
+  { month: "Fév", opening: 85570, revenue: 40100, fixedCosts: 26660, variableCosts: 3300,  net: 10140, closing:  95710, forecast: false },
+  { month: "Mar", opening: 95710, revenue: 48600, fixedCosts: 26660, variableCosts: 3940,  net: 18000, closing: 113710, forecast: false },
+  { month: "Avr", opening: 113710, revenue: 46000, fixedCosts: 26660, variableCosts: 3700, net: 15640, closing: 129350, forecast: true  },
+  { month: "Mai", opening: 129350, revenue: 50000, fixedCosts: 26660, variableCosts: 4000, net: 19340, closing: 148690, forecast: true  },
+  { month: "Jun", opening: 148690, revenue: 55000, fixedCosts: 26660, variableCosts: 4400, net: 23940, closing: 172630, forecast: true  },
+];

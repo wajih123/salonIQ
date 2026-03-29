@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { predictRevenue } from '../../lib/api.js';
+import { predictRevenue, fetchFinance, fetchPerformance, fetchHeatmap, fetchServiceProfitability } from '../../lib/api.js';
 
 const C = {
   bg: 'var(--owner-bg)', bg2: 'var(--owner-bg2)', bg3: 'var(--owner-bg3)',
@@ -82,6 +82,10 @@ export default function StatsView() {
   const [period, setPeriod] = useState('month');
   const [prediction, setPrediction] = useState(null);
   const [loadingPred, setLoadingPred] = useState(false);
+  const [finance, setFinance] = useState(null);
+  const [perf, setPerf] = useState(null);
+  const [heatmap, setHeatmap] = useState(null);
+  const [svcProfit, setSvcProfit] = useState(null);
 
   const maxRevenue = Math.max(...MONTHLY.map(m => m.revenue));
 
@@ -92,7 +96,13 @@ export default function StatsView() {
     setLoadingPred(false);
   }
 
-  useEffect(() => { loadPrediction(); }, []);
+  useEffect(() => {
+    loadPrediction();
+    fetchFinance().then(setFinance).catch(() => {});
+    fetchPerformance().then(setPerf).catch(() => {});
+    fetchHeatmap().then(setHeatmap).catch(() => {});
+    fetchServiceProfitability().then(setSvcProfit).catch(() => {});
+  }, []);
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -239,8 +249,16 @@ export default function StatsView() {
                   <div style={{ fontFamily: 'var(--display)', fontSize: 28, color: C.green, lineHeight: 1 }}>
                     {prediction.predictedRevenue?.toLocaleString('fr-FR')} €
                   </div>
-                  <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>Confiance : <span style={{ color: prediction.confidence === 'high' ? C.green : prediction.confidence === 'medium' ? C.amber : C.red }}>{prediction.confidence}</span></div>
-                  <div style={{ marginTop: 12 }}>
+                  {prediction.predictedNetProfit !== undefined && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontSize: 10, color: C.text3 }}>Bénéfice net estimé</div>
+                      <div style={{ fontSize: 16, fontFamily: 'var(--display)', color: C.gold }}>
+                        {prediction.predictedNetProfit?.toLocaleString('fr-FR')} €
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: C.text3, marginTop: 6 }}>Confiance : <span style={{ color: prediction.confidence === 'high' ? C.green : prediction.confidence === 'medium' ? C.amber : C.red }}>{prediction.confidence}</span></div>
+                  <div style={{ marginTop: 10 }}>
                     <div style={{ fontSize: 10, color: C.red, marginBottom: 2 }}>⚠ Risque</div>
                     <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.4 }}>{prediction.mainRisk}</div>
                   </div>
@@ -267,6 +285,320 @@ export default function StatsView() {
           )}
         </div>
       </div>
+
+      {/* ── BLOC FINANCE & P&L ─────────────────────────────────────────────── */}
+      {finance && (
+        <>
+          {/* Finance KPIs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold }} />
+            <span style={{ fontFamily: 'var(--display)', fontSize: 18, fontWeight: 400, color: C.text }}>Finance & Rentabilité</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            {[
+              { label: 'CA cumulé YTD', value: `${(finance.summary.ytdRevenue / 1000).toFixed(0)}k €`, color: C.green, sub: '6 derniers mois' },
+              { label: 'Résultat net YTD', value: `${(finance.summary.ytdProfit / 1000).toFixed(0)}k €`, color: C.gold, sub: `Marge ${finance.summary.ytdMarginPct}%` },
+              { label: 'Marge nette ce mois', value: `${finance.summary.currentMonthMargin}%`, color: finance.summary.currentMonthMargin > 30 ? C.green : finance.summary.currentMonthMargin > 20 ? C.amber : C.red, sub: `vs 25.3% mois préc.` },
+              { label: 'Seuil rentabilité/j', value: `${finance.summary.breakEvenDaily} €`, color: C.amber, sub: 'CA min journalier' },
+            ].map(k => (
+              <div key={k.label} style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ fontSize: 10, color: C.text3, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>{k.label}</div>
+                <div style={{ fontFamily: 'var(--display)', fontSize: 26, color: k.color, lineHeight: 1 }}>{k.value}</div>
+                <div style={{ fontSize: 10, color: C.text3, marginTop: 6 }}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* P&L Table */}
+          <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Compte de résultat — 6 derniers mois</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {['', 'Oct', 'Nov', 'Déc', 'Jan', 'Fév', 'Mar'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: h === '' ? 'left' : 'right', color: C.text3, fontWeight: 400, fontSize: 11, letterSpacing: '0.04em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label: 'Chiffre d\'affaires', key: 'revenue', color: C.green, bold: true },
+                    { label: '  − Charges totales', key: 'expenses', color: C.red, invert: true },
+                    { label: 'Résultat net', key: 'grossMargin', color: C.gold, bold: true, separator: true },
+                    { label: 'Marge nette', key: 'marginPct', color: C.text2, suffix: '%' },
+                  ].map(row => (
+                    <tr key={row.label} style={{ borderBottom: row.separator ? `2px solid ${C.border2}` : `1px solid ${C.border}` }}>
+                      <td style={{ padding: '9px 16px', color: row.bold ? C.text : C.text3, fontWeight: row.bold ? 500 : 400 }}>{row.label}</td>
+                      {finance.financials.map((m, i) => {
+                        const val = m[row.key];
+                        const display = row.suffix ? `${val}${row.suffix}` : `${val.toLocaleString('fr-FR')} €`;
+                        return (
+                          <td key={i} style={{ padding: '9px 16px', textAlign: 'right', fontFamily: 'var(--mono)', color: row.color, fontWeight: row.bold ? 500 : 400, background: i === 5 ? `${C.green}08` : 'transparent' }}>
+                            {display}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Expense breakdown + Break-even */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+              <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.red }} />
+                Détail des charges — Mars
+              </div>
+              <div style={{ padding: '12px 16px' }}>
+                {[
+                  { label: 'Salaires bruts', value: finance.expenses.salaires, color: '#e05555' },
+                  { label: 'Charges sociales', value: finance.expenses.chargesSociales, color: '#e07555' },
+                  { label: 'Loyer + charges', value: finance.expenses.loyer, color: C.amber },
+                  { label: 'Produits & fournitures', value: finance.expenses.produits, color: C.gold },
+                  { label: 'Marketing', value: finance.expenses.marketing, color: C.green },
+                  { label: 'Assurances & divers', value: finance.expenses.assurances + finance.expenses.divers, color: C.text3 },
+                ].map(e => {
+                  const pct = Math.round((e.value / finance.expenses.total) * 100);
+                  return (
+                    <div key={e.label} style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, color: C.text2 }}>{e.label}</span>
+                        <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.text }}>{e.value.toLocaleString('fr-FR')} € <span style={{ color: C.text3 }}>({pct}%)</span></span>
+                      </div>
+                      <div style={{ height: 3, background: C.bg3, borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: e.color, borderRadius: 2, transition: 'width 0.8s ease', opacity: 0.8 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.text }}>Total charges</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: C.red, fontWeight: 600 }}>{finance.expenses.total.toLocaleString('fr-FR')} €</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+              <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber }} />
+                Analyse seuil de rentabilité
+              </div>
+              <div style={{ padding: '16px' }}>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: C.text3, marginBottom: 2 }}>Seuil mensuel</div>
+                  <div style={{ fontFamily: 'var(--display)', fontSize: 32, color: C.amber }}>{finance.summary.breakEvenMonthly.toLocaleString('fr-FR')} €</div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: C.text3 }}>Atteint</span>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.green }}>{Math.round((finance.financials[5].revenue / finance.summary.breakEvenMonthly) * 100)}%</span>
+                  </div>
+                  <div style={{ height: 8, background: C.bg3, borderRadius: 100, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, Math.round((finance.financials[5].revenue / finance.summary.breakEvenMonthly) * 100))}%`, background: `linear-gradient(90deg, ${C.amber}, ${C.green})`, borderRadius: 100, transition: 'width 1s ease' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                  {[
+                    { label: 'Excédent vs seuil', value: `+${finance.summary.revenueVsBreakEven.toLocaleString('fr-FR')} €`, color: C.green },
+                    { label: 'Croissance MoM', value: `+${finance.summary.revenueGrowthMoM}%`, color: C.gold },
+                    { label: 'Seuil journalier', value: `${finance.summary.breakEvenDaily} €/j`, color: C.amber },
+                    { label: 'Résultat net mois', value: `${(finance.financials[5].grossMargin).toLocaleString('fr-FR')} €`, color: C.gold },
+                  ].map(k => (
+                    <div key={k.label} style={{ background: C.bg3, borderRadius: 10, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 9, color: C.text3, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</div>
+                      <div style={{ fontSize: 14, fontFamily: 'var(--display)', color: k.color }}>{k.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── PERFORMANCE ÉQUIPE ─────────────────────────────────────────────── */}
+      {perf && (
+        <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Performance équipe — détail</span>
+            </div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              {[
+                ['Top performer', perf.teamSummary.topPerformer, C.green],
+                ['CA total équipe', `${perf.teamSummary.totalRevenue.toLocaleString('fr-FR')} €`, C.gold],
+                ['Rebooking moyen', `${perf.teamSummary.avgRebookingRate}%`, C.amber],
+              ].map(([l, v, c]) => (
+                <div key={l} style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 9, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{l}</div>
+                  <div style={{ fontSize: 12, color: c, fontWeight: 500 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {['Styliste', 'CA mois', '€/heure', 'Clients', 'Rebooking', 'Panier moy.', 'Bonus target', 'Atteint'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Styliste' ? 'left' : 'right', color: C.text3, fontWeight: 400, fontSize: 11, letterSpacing: '0.03em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {perf.stylists.sort((a, b) => b.revenueMonth - a.revenueMonth).map((s, i) => (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}`, background: i === 0 ? `${C.green}06` : 'transparent' }}>
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: `${s.color}20`, border: `1px solid ${s.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: s.color, fontWeight: 500 }}>{s.avatar}</div>
+                        <div>
+                          <div style={{ color: C.text, fontWeight: i === 0 ? 500 : 400 }}>{s.name}</div>
+                          {i === 0 && <div style={{ fontSize: 10, color: C.green }}># 1 ce mois</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.text, fontWeight: 500 }}>{s.revenueMonth.toLocaleString('fr-FR')} €</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--mono)', color: s.revenuePerHour > 80 ? C.green : s.revenuePerHour > 65 ? C.amber : C.text2 }}>{s.revenuePerHour} €</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: C.text2 }}>{s.clientsServed}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                      <span style={{ color: s.rebookingRate >= 80 ? C.green : s.rebookingRate >= 70 ? C.amber : C.red }}>{s.rebookingRate}%</span>
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.text2 }}>{s.avgBasket} €</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: C.text3, fontFamily: 'var(--mono)' }}>{s.bonusTarget.toLocaleString('fr-FR')} €</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                      <span style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 100,
+                        background: s.bonusAchievedPct >= 100 ? `${C.green}20` : s.bonusAchievedPct >= 80 ? `${C.amber}20` : `${C.red}20`,
+                        color: s.bonusAchievedPct >= 100 ? C.green : s.bonusAchievedPct >= 80 ? C.amber : C.red,
+                      }}>{s.bonusAchievedPct}%</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── HEATMAP D'OCCUPATION ──────────────────────────────────────── */}
+      {heatmap && (
+        <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Heatmap d'occupation — heures × jours</span>
+            </div>
+            <div style={{ fontSize: 11, color: C.text3 }}>% de remplissage par créneau</div>
+          </div>
+          <div style={{ padding: '16px 20px', overflowX: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `52px repeat(6, 1fr)`, gap: 4, minWidth: 380 }}>
+              <div />
+              {heatmap.days.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: 11, color: C.text3, fontWeight: 500, padding: '4px 0' }}>{d}</div>
+              ))}
+              {heatmap.hours.map((h, hi) => (
+                <HeatRow key={h} hour={h} row={heatmap.data[hi]} days={heatmap.days} C={C} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap' }}>
+              {[['≥ 90% Complet', '#4eca7e'], ['70–89% Bien rempli', '#f0a500'], ['45–69% Moyen', '#c9a84c'], ['< 45% Creux', null]].map(([l, c]) => (
+                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.text3 }}>
+                  <div style={{ width: 14, height: 10, borderRadius: 3, background: c ? `${c}35` : C.bg3, border: `1px solid ${c ? `${c}60` : C.border}` }} />{l}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RENTABILITÉ PAR PRESTATION ───────────────────────────────── */}
+      {svcProfit && (
+        <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Rentabilité par prestation</span>
+            </div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              {[
+                ['CA total', `${svcProfit.totals.revenue.toLocaleString('fr-FR')} €`, C.green],
+                ['Sessions', String(svcProfit.totals.sessions), C.text2],
+                ['Marge moy.', `${svcProfit.totals.avgMarginPct}%`, C.gold],
+              ].map(([l, v, c]) => (
+                <div key={l} style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 9, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{l}</div>
+                  <div style={{ fontSize: 12, color: c, fontWeight: 500, fontFamily: 'var(--mono)' }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {['Prestation', 'Cat.', 'CA', '% CA', 'Sessions', 'Prix moy.', 'Produits', 'Main d\'œuvre', 'Marge €', 'Marge %', '±'].map(h => (
+                    <th key={h} style={{ padding: '9px 12px', textAlign: h === 'Prestation' || h === 'Cat.' ? 'left' : 'right', color: C.text3, fontWeight: 400, fontSize: 10, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...svcProfit.services].sort((a, b) => b.revenue - a.revenue).map((s, i) => (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}`, background: i === 0 ? `${C.gold}06` : 'transparent' }}>
+                    <td style={{ padding: '9px 12px', color: C.text, fontWeight: i === 0 ? 500 : 400, whiteSpace: 'nowrap' }}>{s.name}</td>
+                    <td style={{ padding: '9px 12px', color: C.text3, fontSize: 11 }}>{s.category}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.green, fontWeight: 500 }}>{s.revenue.toLocaleString('fr-FR')} €</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                        <div style={{ width: 32, height: 3, background: C.bg3, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${s.revenuePct}%`, background: C.green, borderRadius: 2 }} />
+                        </div>
+                        <span style={{ color: C.text3, fontFamily: 'var(--mono)', fontSize: 10 }}>{s.revenuePct}%</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', color: C.text2, fontFamily: 'var(--mono)' }}>{s.sessions}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.text2 }}>{s.avgPrice} €</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: '#e07555' }}>{s.productCost} €</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.amber }}>{s.laborCost} €</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 500, color: C.gold }}>{s.netMarginEur} €</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 100, background: s.grossMarginPct >= 55 ? `${C.green}20` : s.grossMarginPct >= 40 ? `${C.amber}20` : `${C.red}20`, color: s.grossMarginPct >= 55 ? C.green : s.grossMarginPct >= 40 ? C.amber : C.red }}>{s.grossMarginPct}%</span>
+                    </td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right', color: s.trend.startsWith('+') ? C.green : s.trend === '0%' ? C.text3 : C.red, fontFamily: 'var(--mono)', fontSize: 11 }}>{s.trend}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
     </div>
+  );
+}
+
+function HeatRow({ hour, row, days, C }) {
+  return (
+    <>
+      <div style={{ fontSize: 10, color: C.text3, display: 'flex', alignItems: 'center', fontFamily: 'var(--mono)' }}>{hour}</div>
+      {row.map((val, di) => (
+        <div key={`${hour}-${di}`} title={`${hour} ${days[di]} — ${val}%`} style={{
+          borderRadius: 6, height: 30,
+          background: val >= 90 ? `${'#4eca7e'}35` : val >= 70 ? `${'#f0a500'}30` : val >= 45 ? 'rgba(201,168,76,0.18)' : C.bg3,
+          border: `1px solid ${val >= 90 ? '#4eca7e60' : val >= 70 ? '#f0a50050' : C.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, color: val >= 70 ? C.text : C.text3, fontFamily: 'var(--mono)',
+          opacity: val === 0 ? 0.2 : 1,
+        }}>{val > 0 ? `${val}%` : '—'}</div>
+      ))}
+    </>
   );
 }
